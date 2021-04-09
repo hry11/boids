@@ -9,7 +9,7 @@ class boid():
     angle_speed = 15
     speed = 200
     xspeed, yspeed = 0, 0 
-    sight= 100
+    sight= 200
     xsight, ysight = 0, 0
     size=10
     near_edge = False
@@ -71,6 +71,13 @@ class boid():
                 self.angle += self.angle_speed
                 #self.angle += random.randint(0, 45)
 
+    def smoothturn(self, angle): #slows down the turn when the angle to turn is geting small with a slightly modified logistic function
+        steepness = 0.05
+        if -self.angle_speed <= angle <= self.angle_speed:
+            return abs(2/(1+math.exp(-steepness*angle))-1)
+        else:
+            return 1
+
     def assess(self):
         rows = len(self.cluster)
         if rows>0 and self.near_edge == False:
@@ -81,11 +88,17 @@ class boid():
             mean_dir = (sum([self.cluster[i][4] for i in range(rows)])+self.angle)/(rows+1)# mean direction angle of all entities in the cluster
             mean_angle = math.degrees(math.atan2(mean_yspeed, mean_xspeed))
             center_distance = math.hypot(mean_x, mean_y)
-            center_angle = vector_angle(mean_x, mean_y, center_distance, self.xspeed, self.yspeed, self.speed)
-            print(self.cluster[0][2])
-            print(self.angle)
-            print("mean", mean_angle)
+            center_angle = vector_angle(self.x-mean_x, self.y-mean_y, center_distance, self.xspeed, self.yspeed, self.speed)
+            #if too far from the center of the cluster, get closer
+            print(center_angle)
             #align with average direction of cluster by finding the shortest angle path:
+            direction = ((self.angle-mean_angle+180)%360)-180
+            if direction > 0:
+                self.angle-=self.angle_speed*self.smoothturn(direction)
+            elif direction < 0:
+                self.angle+=self.angle_speed*self.smoothturn(direction)
+
+
             self.cluster_center = pyglet.shapes.Line(mean_x, mean_y, mean_x+(100*math.cos(math.radians(mean_angle))), mean_y+(100*math.sin(math.radians(mean_angle))), width=1, color=(0, 0, 255)) #draws vector starting at position center oriented with mean cluster angle
         else:
             self.cluster_center = pyglet.shapes.Line(0, 0, 0, 0, width=1, color=(255, 0, 0))
@@ -93,8 +106,8 @@ class boid():
 
     def update(self, dt):
         if self.near_edge == False: self.assess()
-        #self.treadmill()
-        self.detect_obstacles()
+        self.treadmill()
+        #self.detect_obstacles()
         self.turn()#can be optimized
         self.x += self.xspeed*dt
         self.y += self.yspeed*dt
@@ -105,7 +118,7 @@ class boid():
 def vector_angle(x1, y1, norm1, x2, y2, norm2): #gets the angle between two 2d vectors with a dot product
     return math.degrees(math.acos((x1*x2+y1*y2)/(norm1*norm2)))
 
-n=10
+n=20
 creation = [boid(i,100,900) for i in range(n)]
 
 def distances(array):
@@ -115,7 +128,7 @@ def distances(array):
         for j in range(i+1, n):
             if abs(array[j].x-array[i].x) < square and abs(array[j].y-array[i].y) < square:
                 if math.hypot(array[j].x-array[i].x, array[j].y-array[i].y)<=boid.sight:
-                    pyglet.shapes.Line(array[i].x, array[i].y, array[j].x, array[j].y, width=1, color=(100, 100, 100)).draw()
+                    #pyglet.shapes.Line(array[i].x, array[i].y, array[j].x, array[j].y, width=1, color=(100, 100, 100)).draw()
                     array[i].cluster.append([array[j].x, array[j].y, array[j].xspeed, array[j].yspeed, array[j].angle])
                     array[j].cluster.append([array[i].x, array[i].y, array[i].xspeed, array[i].yspeed, array[i].angle])
 
@@ -130,7 +143,7 @@ def on_draw():
     for boid in creation:
         boid.appearance.draw()
         boid.sight_line.draw()
-        boid.cluster_center.draw()
+        #boid.cluster_center.draw()
 
 pyglet.clock.schedule_interval(update, 1/30.0)
 pyglet.app.run()
