@@ -6,10 +6,11 @@ print(window.get_size())
 class boid():
     x, y = 0, 0
     angle = 0 
-    angle_speed = 15
-    speed = 200
+    angle_speed = 35
+    speed = 400
+    basespeed = 400
     xspeed, yspeed = 0, 0 
-    sight= 200
+    sight= 50
     xsight, ysight = 0, 0
     size=10
     near_edge = False
@@ -46,19 +47,19 @@ class boid():
         right = False #boolean value for turning either right or left
         if (self.x-self.sight <= 0 and 90 < self.angle < 270):
             self.near_edge = True
-            if self.angle <= 180 and self.y < window.get_size()[1]-self.sight:
+            if self.angle <= 180 and self.y < window.get_size()[1]-self.size*2:
                 right = True 
         elif (self.x+self.sight >= window.get_size()[0] and (self.angle<90 or self.angle>270)):
             self.near_edge = True
-            if self.angle >= 270 and self.y > self.sight:
+            if self.angle >= 270 and self.y > self.size*2:
                 right = True
         elif (self.y-self.sight <= 0 and 180 < self.angle < 360):
             self.near_edge = True
-            if self.angle <= 270 and self.x > self.sight:
+            if self.angle <= 270 and self.x > self.size*2:
                 right = True
         elif (self.y+self.sight >= window.get_size()[1] and 0 < self.angle < 180):
             self.near_edge = True
-            if self.angle <= 90 and self.x < window.get_size()[0]-self.sight:
+            if self.angle <= 90 and self.x < window.get_size()[0]-self.size*2:
                 right = True
         else:
             self.near_edge = False
@@ -66,12 +67,12 @@ class boid():
         if self.near_edge == True:
             if right == True:
                 self.angle -= self.angle_speed
-                #self.angle -= random.randint(0, 45)
+                self.angle -= random.randint(0, 20)
             else:
                 self.angle += self.angle_speed
-                #self.angle += random.randint(0, 45)
+                self.angle += random.randint(0, 20)
 
-    def smoothturn(self, angle): #slows down the turn when the angle to turn is geting small with a slightly modified logistic function
+    def smooth(self, angle): #slows down the turn when the angle to turn is geting small with a slightly modified logistic function
         steepness = 0.05
         if -self.angle_speed <= angle <= self.angle_speed:
             return abs(2/(1+math.exp(-steepness*angle))-1)
@@ -92,13 +93,10 @@ class boid():
             #align with average direction of cluster by finding the shortest angle path:
             direction = ((self.angle-mean_angle+180)%360)-180
             if direction > 0:
-                self.angle-=self.angle_speed*self.smoothturn(direction)
+                self.angle-=self.angle_speed*self.smooth(direction)
             elif direction < 0:
-                self.angle+=self.angle_speed*self.smoothturn(direction)
-            #avoid other entities
-            for i in range(rows):
-                if math.hypot(self.x-self.cluster[i][2], self.y-self.cluster[i][3]) < 2*self.size:
-                    self.angle+=angle_speed
+                self.angle+=self.angle_speed*self.smooth(direction)
+            #stay close to the center
 
             self.cluster_center = pyglet.shapes.Line(mean_x, mean_y, mean_x+(100*math.cos(math.radians(mean_angle))), mean_y+(100*math.sin(math.radians(mean_angle))), width=1, color=(0, 0, 255)) #draws vector starting at position center oriented with mean cluster angle
         else:
@@ -107,8 +105,8 @@ class boid():
 
     def update(self, dt):
         if self.near_edge == False: self.assess()
-        #self.treadmill()
-        self.detect_obstacles()
+        self.treadmill()
+        #self.detect_obstacles()
         self.turn()#can be optimized
         self.x += self.xspeed*dt
         self.y += self.yspeed*dt
@@ -117,18 +115,42 @@ class boid():
         self.sight_line = pyglet.shapes.Line(self.x, self.y, self.x+self.xsight, self.y+self.ysight, width=1, color=(255, 0, 0))
 
 def vector_angle(x1, y1, norm1, x2, y2, norm2): #gets the angle between two 2d vectors with a dot product
-    return math.degrees(math.acos((x1*x2+y1*y2)/(norm1*norm2)))
+    if norm1*norm2 != 0:
+        dotproduct = (x1*x2+y1*y2)/(norm1*norm2)
+        if dotproduct < 1:
+            return 180
+        elif dotproduct > 1:
+            return 0;
+        else:
+            return math.degrees(math.acos(dotproduct))
+    else:
+        return 0
 
-n=20
+n=64
 creation = [boid(i,100,900) for i in range(n)]
 
 def distances(array):
     square = boid.sight*2 #verify if its within a "square" distance first, easier to calculate
     n = len(array)
     for i in range(n):
+        if len(array[i].cluster)==0:
+            array[i].speed=boid.basespeed
         for j in range(i+1, n):
+            if len(array[j].cluster)==0:
+                array[j].speed=boid.basespeed
             if abs(array[j].x-array[i].x) < square and abs(array[j].y-array[i].y) < square:
-                if math.hypot(array[j].x-array[i].x, array[j].y-array[i].y)<=boid.sight:
+                dist = math.hypot(array[j].x-array[i].x, array[j].y-array[i].y)
+                if dist<=boid.sight:
+                    #handle colisions
+                    if dist<10*boid.size and array[j].speed > 0.5*boid.basespeed and array[i].speed > 0.5*boid.basespeed:
+                        if array[j].x-boid.size <= array[i].x+array[i].xspeed <= array[j].x+boid.size or array[j].y-boid.size <= array[i].y+array[i].yspeed <= array[j].y+boid.size:
+                            array[i].speed *= 0.75
+                            array[j].speed *= 1.25
+                        else:
+                            array[j].speed *= 0.75
+                            array[i].speed *= 1.25
+                    else:
+                        array[i].speed = array[j].speed = boid.basespeed
                     #pyglet.shapes.Line(array[i].x, array[i].y, array[j].x, array[j].y, width=1, color=(100, 100, 100)).draw()
                     array[i].cluster.append([array[j].x, array[j].y, array[j].xspeed, array[j].yspeed, array[j].angle])
                     array[j].cluster.append([array[i].x, array[i].y, array[i].xspeed, array[i].yspeed, array[i].angle])
