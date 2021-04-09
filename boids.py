@@ -6,7 +6,7 @@ print(window.get_size())
 class boid():
     x, y = 0, 0
     angle = 0 
-    angle_speed = 35
+    angle_speed = 5
     speed = 400
     basespeed = 400
     xspeed, yspeed = 0, 0 
@@ -44,22 +44,23 @@ class boid():
 
     def detect_obstacles(self):
         #only walls for now
+        factor = 10
         right = False #boolean value for turning either right or left
         if (self.x-self.sight <= 0 and 90 < self.angle < 270):
             self.near_edge = True
-            if self.angle <= 180 and self.y < window.get_size()[1]-self.size*2:
+            if self.angle <= 180 and self.y < window.get_size()[1]-self.sight*factor:
                 right = True 
         elif (self.x+self.sight >= window.get_size()[0] and (self.angle<90 or self.angle>270)):
             self.near_edge = True
-            if self.angle >= 270 and self.y > self.size*2:
+            if self.angle >= 270 and self.y > self.sight*factor:
                 right = True
         elif (self.y-self.sight <= 0 and 180 < self.angle < 360):
             self.near_edge = True
-            if self.angle <= 270 and self.x > self.size*2:
+            if self.angle <= 270 and self.x > self.sight*factor:
                 right = True
         elif (self.y+self.sight >= window.get_size()[1] and 0 < self.angle < 180):
             self.near_edge = True
-            if self.angle <= 90 and self.x < window.get_size()[0]-self.size*2:
+            if self.angle <= 90 and self.x < window.get_size()[0]-self.sight*factor:
                 right = True
         else:
             self.near_edge = False
@@ -67,10 +68,10 @@ class boid():
         if self.near_edge == True:
             if right == True:
                 self.angle -= self.angle_speed
-                self.angle -= random.randint(0, 20)
+                self.angle -= random.randint(0, 30)
             else:
                 self.angle += self.angle_speed
-                self.angle += random.randint(0, 20)
+                self.angle += random.randint(0, 30)
 
     def smooth(self, angle): #slows down the turn when the angle to turn is geting small with a slightly modified logistic function
         steepness = 0.05
@@ -88,7 +89,7 @@ class boid():
             mean_yspeed = (sum([self.cluster[i][3] for i in range(rows)])+self.yspeed)/(rows+1)
             mean_dir = (sum([self.cluster[i][4] for i in range(rows)])+self.angle)/(rows+1)# mean direction angle of all entities in the cluster
             mean_angle = math.degrees(math.atan2(mean_yspeed, mean_xspeed))
-            center_distance = math.hypot(mean_x, mean_y)
+            center_distance = math.hypot(mean_x-self.x, mean_y-self.y)
             center_angle = vector_angle(self.x-mean_x, self.y-mean_y, center_distance, self.xspeed, self.yspeed, self.speed)
             #align with average direction of cluster by finding the shortest angle path:
             direction = ((self.angle-mean_angle+180)%360)-180
@@ -96,7 +97,6 @@ class boid():
                 self.angle-=self.angle_speed*self.smooth(direction)
             elif direction < 0:
                 self.angle+=self.angle_speed*self.smooth(direction)
-            #stay close to the center
 
             self.cluster_center = pyglet.shapes.Line(mean_x, mean_y, mean_x+(100*math.cos(math.radians(mean_angle))), mean_y+(100*math.sin(math.radians(mean_angle))), width=1, color=(0, 0, 255)) #draws vector starting at position center oriented with mean cluster angle
         else:
@@ -105,13 +105,13 @@ class boid():
 
     def update(self, dt):
         if self.near_edge == False: self.assess()
-        self.treadmill()
-        #self.detect_obstacles()
+        #self.treadmill()
+        self.detect_obstacles()
         self.turn()#can be optimized
         self.x += self.xspeed*dt
         self.y += self.yspeed*dt
         self.appearance = pyglet.shapes.Circle(self.x, self.y, radius=self.size, color=(255, 225, 255))
-        #self.speed_line = pyglet.shapes.Line(self.x, self.y, self.x+self.xspeed, self.y+self.yspeed, width=1, color=(255, 0, 0))
+        #self.speed_line = pyglet.shapes.Line(self.x, self.y, self.x+self.xspeed, self.y+self.yspeed, width=1, color=(0, 255, 0))
         self.sight_line = pyglet.shapes.Line(self.x, self.y, self.x+self.xsight, self.y+self.ysight, width=1, color=(255, 0, 0))
 
 def vector_angle(x1, y1, norm1, x2, y2, norm2): #gets the angle between two 2d vectors with a dot product
@@ -140,7 +140,7 @@ def distances(array):
                 array[j].speed=boid.basespeed
             if abs(array[j].x-array[i].x) < square and abs(array[j].y-array[i].y) < square:
                 dist = math.hypot(array[j].x-array[i].x, array[j].y-array[i].y)
-                if dist<=boid.sight:
+                if dist<=3*boid.sight:
                     #handle colisions
                     if dist<10*boid.size and array[j].speed > 0.5*boid.basespeed and array[i].speed > 0.5*boid.basespeed:
                         if array[j].x-boid.size <= array[i].x+array[i].xspeed <= array[j].x+boid.size or array[j].y-boid.size <= array[i].y+array[i].yspeed <= array[j].y+boid.size:
